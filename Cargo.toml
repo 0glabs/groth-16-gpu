@@ -117,6 +117,14 @@ features = ["attributes"]
 optional = true
 default-features = false
 
+[dependencies.ark-bn254]
+version = "0.4.0"
+optional = true
+
+[dependencies.ag-cuda-ec]
+path = "../0g-ec-gpu/ag-cuda-ec"
+optional = true
+
 [dev-dependencies.ark-bls12-377]
 version = "0.4.0"
 features = ["curve"]
@@ -190,3 +198,4 @@ std = [
     "ark-crypto-primitives/std",
     "ark-std/std",
 ]
+cuda = ["ark-bn254", "ag-cuda-ec"]

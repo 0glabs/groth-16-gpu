@@ -46,16 +46,16 @@ where
 
 /// Computes instance and witness reductions from R1CS to
 /// Quadratic Arithmetic Programs (QAPs).
-pub trait R1CSToQAP {
+pub trait R1CSToQAP<F: PrimeField, D: EvaluationDomain<F>> {
     /// Computes a QAP instance corresponding to the R1CS instance defined by `cs`.
-    fn instance_map_with_evaluation<F: PrimeField, D: EvaluationDomain<F>>(
+    fn instance_map_with_evaluation(
         cs: ConstraintSystemRef<F>,
         t: &F,
     ) -> Result<(Vec<F>, Vec<F>, Vec<F>, F, usize, usize), SynthesisError>;
 
     #[inline]
     /// Computes a QAP witness corresponding to the R1CS witness defined by `cs`.
-    fn witness_map<F: PrimeField, D: EvaluationDomain<F>>(
+    fn witness_map(
         prover: ConstraintSystemRef<F>,
     ) -> Result<Vec<F>, SynthesisError> {
         let matrices = prover.to_matrices().unwrap();
@@ -71,7 +71,7 @@ pub trait R1CSToQAP {
         ]
         .concat();
 
-        Self::witness_map_from_matrices::<F, D>(
+        Self::witness_map_from_matrices(
             &matrices,
             num_inputs,
             num_constraints,
@@ -80,7 +80,7 @@ pub trait R1CSToQAP {
     }
 
     /// Computes a QAP witness corresponding to the R1CS witness defined by `cs`.
-    fn witness_map_from_matrices<F: PrimeField, D: EvaluationDomain<F>>(
+    fn witness_map_from_matrices(
         matrices: &ConstraintMatrices<F>,
         num_inputs: usize,
         num_constraints: usize,
@@ -89,7 +89,7 @@ pub trait R1CSToQAP {
 
     /// Computes the exponents that the generator uses to calculate base
     /// elements which the prover later uses to compute `h(x)t(x)/delta`.
-    fn h_query_scalars<F: PrimeField, D: EvaluationDomain<F>>(
+    fn h_query_scalars(
         max_power: usize,
         t: F,
         zt: F,
@@ -100,10 +100,10 @@ pub trait R1CSToQAP {
 /// Computes the R1CS-to-QAP reduction defined in [`libsnark`](https://github.com/scipr-lab/libsnark/blob/2af440246fa2c3d0b1b0a425fb6abd8cc8b9c54d/libsnark/reductions/r1cs_to_qap/r1cs_to_qap.tcc).
 pub struct LibsnarkReduction;
 
-impl R1CSToQAP for LibsnarkReduction {
+impl<F: PrimeField, D: EvaluationDomain<F>> R1CSToQAP<F, D> for LibsnarkReduction {
     #[inline]
     #[allow(clippy::type_complexity)]
-    fn instance_map_with_evaluation<F: PrimeField, D: EvaluationDomain<F>>(
+    fn instance_map_with_evaluation(
         cs: ConstraintSystemRef<F>,
         t: &F,
     ) -> R1CSResult<(Vec<F>, Vec<F>, Vec<F>, F, usize, usize)> {
@@ -147,7 +147,7 @@ impl R1CSToQAP for LibsnarkReduction {
         Ok((a, b, c, zt, qap_num_variables, domain_size))
     }
 
-    fn witness_map_from_matrices<F: PrimeField, D: EvaluationDomain<F>>(
+    fn witness_map_from_matrices(
         matrices: &ConstraintMatrices<F>,
         num_inputs: usize,
         num_constraints: usize,
@@ -212,7 +212,7 @@ impl R1CSToQAP for LibsnarkReduction {
         Ok(ab)
     }
 
-    fn h_query_scalars<F: PrimeField, D: EvaluationDomain<F>>(
+    fn h_query_scalars(
         max_power: usize,
         t: F,
         zt: F,

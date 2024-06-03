@@ -42,6 +42,7 @@ impl<ConstraintF: Field> ConstraintSynthesizer<ConstraintF> for MySillyCircuit<C
     }
 }
 
+#[cfg(not(feature = "cuda"))]
 fn test_prove_and_verify<E>(n_iters: usize)
 where
     E: Pairing,
@@ -72,6 +73,7 @@ where
     }
 }
 
+#[cfg(not(feature = "cuda"))]
 fn test_rerandomize<E>()
 where
     E: Pairing,
@@ -117,6 +119,7 @@ where
     }
 }
 
+#[cfg(not(feature = "cuda"))]
 mod bls12_377 {
     use super::{test_prove_and_verify, test_rerandomize};
     use ark_bls12_377::Bls12_377;
@@ -132,6 +135,7 @@ mod bls12_377 {
     }
 }
 
+#[cfg(not(feature = "cuda"))]
 mod cp6_782 {
     use super::{test_prove_and_verify, test_rerandomize};
 
@@ -145,5 +149,44 @@ mod cp6_782 {
     #[test]
     fn rerandomize() {
         test_rerandomize::<CP6_782>();
+    }
+}
+
+#[cfg(feature = "cuda")]
+mod gpu_bn_254 {
+    use super::*;
+    use crate::gpu::*;
+    use ark_bn254;
+    fn test_prove_and_verify(n_iters: usize)
+    {
+        let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
+
+        let (pk, vk) = Groth16::setup(MySillyCircuit { a: None, b: None }, &mut rng).unwrap();
+        let pvk = prepare_verifying_key::<ark_bn254::Bn254>(&vk);
+
+        for _ in 0..n_iters {
+            let a = ark_bn254::Fr::rand(&mut rng);
+            let b = ark_bn254::Fr::rand(&mut rng);
+            let mut c = a;
+            c *= b;
+
+            let proof = Groth16::prove(
+                &pk,
+                MySillyCircuit {
+                    a: Some(a),
+                    b: Some(b),
+                },
+                &mut rng,
+            )
+            .unwrap();
+
+            assert!(Groth16::verify_with_processed_vk(&pvk, &[c], &proof).unwrap());
+            assert!(!Groth16::verify_with_processed_vk(&pvk, &[a], &proof).unwrap());
+        }
+    }
+
+    #[test]
+    fn prove_and_verify() {
+        test_prove_and_verify(1);
     }
 }
