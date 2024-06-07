@@ -384,7 +384,7 @@ impl Groth16 {
             scalar_bits,
             g1_window,
             &g1_table,
-            &gpu::GpuLibsnarkReduction::h_query_scalars(m_raw - 1, t, zt, delta_inverse)?,
+            &gpu::GpuLibsnarkReduction::h_query_scalars(m_raw, t, zt, delta_inverse)?,
         );
 
         end_timer!(h_time);

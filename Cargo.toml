@@ -125,6 +125,10 @@ optional = true
 path = "../0g-ec-gpu/ag-cuda-ec"
 optional = true
 
+[dependencies.ag-types]
+path = "../0g-ec-gpu/ag-types"
+optional = true
+
 [dev-dependencies.ark-bls12-377]
 version = "0.4.0"
 features = ["curve"]
@@ -198,4 +202,4 @@ std = [
     "ark-crypto-primitives/std",
     "ark-std/std",
 ]
-cuda = ["ark-bn254", "ag-cuda-ec"]
+cuda = ["ark-bn254", "ag-cuda-ec", "ag-types"]
