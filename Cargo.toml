@@ -67,6 +67,10 @@ path = "benches/bench.rs"
 harness = false
 required-features = ["std"]
 
+[dependencies]
+ag-cuda-ec = { git = "https://github.com/0glabs/0g-ec-gpu.git", rev = "9d3a884", optional = true }
+ag-types = { git = "https://github.com/0glabs/0g-ec-gpu.git", rev = "9d3a884", optional = true }
+
 [dependencies.ark-crypto-primitives]
 version = "0.4.0"
 features = ["snark"]
@@ -119,14 +123,6 @@ default-features = false
 
 [dependencies.ark-bn254]
 version = "0.4.0"
-optional = true
-
-[dependencies.ag-cuda-ec]
-path = "../0g-ec-gpu/ag-cuda-ec"
-optional = true
-
-[dependencies.ag-types]
-path = "../0g-ec-gpu/ag-types"
 optional = true
 
 [dev-dependencies.ark-bls12-377]

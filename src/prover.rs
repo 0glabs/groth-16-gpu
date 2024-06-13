@@ -274,7 +274,7 @@ impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::Scala
 #[cfg(feature = "cuda")]
 use crate::gpu;
 #[cfg(feature = "cuda")]
-const CHUNK_NUM: usize = 2;
+const CHUNK_NUM: usize = 256;
 #[cfg(feature = "cuda")]
 use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
 #[cfg(feature = "cuda")]
@@ -322,44 +322,40 @@ impl Groth16 {
         let h_assignment = cfg_into_iter!(h)
             .map(|s| s.into_bigint())
             .collect::<Vec<_>>();
-            // GPU
-        // let mut h_query = pk.h_query.clone();
-        // let mut new_h_query = vec![ark_bn254::G1Affine::generator()];
-        // new_h_query.extend(h_query);
-        let bases = ag_cuda_ec::multiexp::upload_multiexp_bases_st(&pk.h_query).unwrap();
-        let h_acc_: Vec<_> = ag_cuda_ec::multiexp::multiple_multiexp_st(
-            &bases,
+        // GPU
+        let msm_timer = start_timer!(|| format!("GPU MSM: {}", pk.h_query.len()));
+        let h_acc: ark_bn254::G1Projective = ag_cuda_ec::multiexp::multiexp_mt(
+            &pk.h_query,
             &h_assignment,
             CHUNK_NUM,
             WINDOW_SIZE,
             false,
         )
-        .unwrap();
-        // println!("h_acc: {:?}", h_acc.clone());
-        let h_acc: ark_bn254::G1Projective = h_acc_.iter().cloned().sum();
-            // CPU
-        // let h_acc = ark_bn254::G1Projective::msm_bigint(&pk.h_query, &h_assignment);
-        println!("h_acc: {:?}", h_acc.clone());
-        drop(h_assignment);
+        .unwrap()
+        .par_iter()
+        .cloned()
+        .sum();
+        end_timer!(msm_timer);
 
         // Compute C
+        let msm_timer = start_timer!(|| format!("GPU MSM: {}", pk.h_query.len()));
+
         let aux_assignment = cfg_iter!(aux_assignment)
             .map(|s| s.into_bigint())
             .collect::<Vec<_>>();
-            // GPU
-        let bases = ag_cuda_ec::multiexp::upload_multiexp_bases_mt(&pk.l_query).unwrap();
-        let l_aux_acc_: Vec<_> = ag_cuda_ec::multiexp::multiple_multiexp_mt(
-            &bases,
+        // GPU
+        let l_aux_acc: ark_bn254::G1Projective = ag_cuda_ec::multiexp::multiexp_mt(
+            &pk.l_query,
             &aux_assignment,
             CHUNK_NUM,
             WINDOW_SIZE,
             true,
         )
-        .unwrap();
-        let l_aux_acc: ark_bn254::G1Projective = l_aux_acc_.iter().cloned().sum();
-            // CPU
-        // let l_aux_acc = ark_bn254::G1Projective::msm_bigint(&pk.l_query, &aux_assignment);
-        println!("l_aux_acc: {:?}", l_aux_acc.clone());
+        .unwrap()
+        .iter()
+        .cloned()
+        .sum();
+        end_timer!(msm_timer);
 
         let r_s_delta_g1 = pk
             .delta_g1
@@ -382,7 +378,7 @@ impl Groth16 {
         let r_g1 = pk.delta_g1.mul(r);
 
         // let g_a = Self::calculate_coeff_g1(r_g1, &pk.a_query, pk.vk.alpha_g1, &assignment);
-        let g_a = Self::calculate_coeff(r_g1, &pk.a_query, pk.vk.alpha_g1, &assignment);
+        let g_a = Self::calculate_coeff_g1(r_g1, &pk.a_query, pk.vk.alpha_g1, &assignment);
 
         let s_g_a = g_a.mul_bigint(&s.into_bigint());
         end_timer!(a_acc_time);
@@ -391,7 +387,7 @@ impl Groth16 {
         let g1_b = if !r.is_zero() {
             let b_g1_acc_time = start_timer!(|| "Compute B in G1");
             let s_g1 = pk.delta_g1.mul(s);
-            let g1_b = Self::calculate_coeff(s_g1, &pk.b_g1_query, pk.beta_g1, &assignment);
+            let g1_b = Self::calculate_coeff_g1(s_g1, &pk.b_g1_query, pk.beta_g1, &assignment);
             // let g1_b = Self::calculate_coeff_g1(s_g1, &pk.b_g1_query, pk.beta_g1, &assignment);
 
             end_timer!(b_g1_acc_time);
@@ -405,7 +401,7 @@ impl Groth16 {
         let b_g2_acc_time = start_timer!(|| "Compute B in G2");
         let s_g2 = pk.vk.delta_g2.mul(s);
         // let g2_b = Self::calculate_coeff_g2(s_g2, &pk.b_g2_query, pk.vk.beta_g2, &assignment);
-        let g2_b = Self::calculate_coeff(s_g2, &pk.b_g2_query, pk.vk.beta_g2, &assignment);
+        let g2_b = Self::calculate_coeff_g2(s_g2, &pk.b_g2_query, pk.vk.beta_g2, &assignment);
         let r_g1_b = g1_b.mul_bigint(&r.into_bigint());
         drop(assignment);
 
@@ -533,17 +529,16 @@ impl Groth16 {
         assignment: &[<ark_bn254::Fr as PrimeField>::BigInt],
     ) -> <ark_bn254::G1Affine as AffineRepr>::Group {
         let el = query[0];
-        let bases = ag_cuda_ec::multiexp::upload_multiexp_bases_mt(&query[1..]).unwrap();
-        // let acc = ark_bn254::G1Projective::msm_bigint(&query[1..], assignment);
-        let acc: Vec<_> = ag_cuda_ec::multiexp::multiple_multiexp_mt(
-            &bases,
+        let acc = ag_cuda_ec::multiexp::multiexp_mt(
+            &query[1..],
             assignment,
             CHUNK_NUM,
             WINDOW_SIZE,
-            true,
+            false,
         )
         .unwrap();
         let acc_sum: ark_bn254::G1Projective = acc.iter().cloned().sum();
+
         let mut res = initial;
         res.add_assign(&el.into_group());
         res += &acc_sum;
@@ -559,7 +554,15 @@ impl Groth16 {
         assignment: &[<ark_bn254::Fr as PrimeField>::BigInt],
     ) -> <ark_bn254::G2Affine as AffineRepr>::Group {
         let el = query[0];
-        let acc = <ark_bn254::G2Affine as AffineRepr>::Group::msm_bigint(&query[1..], assignment);
+        let acc_sum = ag_cuda_ec::multiexp::multiexp_mt(
+            &query[1..],
+            assignment,
+            CHUNK_NUM,
+            WINDOW_SIZE,
+            false,
+        )
+        .unwrap();
+        let acc: ark_bn254::G2Projective = acc_sum.iter().cloned().sum();
 
         let mut res = initial;
         res.add_assign(&el.into_group());

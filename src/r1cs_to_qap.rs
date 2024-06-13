@@ -55,9 +55,7 @@ pub trait R1CSToQAP<F: PrimeField, D: EvaluationDomain<F>> {
 
     #[inline]
     /// Computes a QAP witness corresponding to the R1CS witness defined by `cs`.
-    fn witness_map(
-        prover: ConstraintSystemRef<F>,
-    ) -> Result<Vec<F>, SynthesisError> {
+    fn witness_map(prover: ConstraintSystemRef<F>) -> Result<Vec<F>, SynthesisError> {
         let matrices = prover.to_matrices().unwrap();
         let num_inputs = prover.num_instance_variables();
         let num_constraints = prover.num_constraints();
@@ -71,12 +69,7 @@ pub trait R1CSToQAP<F: PrimeField, D: EvaluationDomain<F>> {
         ]
         .concat();
 
-        Self::witness_map_from_matrices(
-            &matrices,
-            num_inputs,
-            num_constraints,
-            &full_assignment,
-        )
+        Self::witness_map_from_matrices(&matrices, num_inputs, num_constraints, &full_assignment)
     }
 
     /// Computes a QAP witness corresponding to the R1CS witness defined by `cs`.

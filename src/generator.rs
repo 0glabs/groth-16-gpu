@@ -13,7 +13,9 @@ use ark_std::{cfg_into_iter, cfg_iter};
 use rayon::prelude::*;
 
 #[cfg(not(feature = "cuda"))]
-impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>> Groth16<E, QAP> {
+impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>>
+    Groth16<E, QAP>
+{
     /// Generates a random common reference string for
     /// a circuit using the provided R1CS-to-QAP reduction.
     #[inline]
@@ -95,8 +97,7 @@ impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::Scala
 
         let reduction_time = start_timer!(|| "R1CS to QAP Instance Map with Evaluation");
         let num_instance_variables = cs.num_instance_variables();
-        let (a, b, c, zt, qap_num_variables, m_raw) =
-            QAP::instance_map_with_evaluation(cs, &t)?;
+        let (a, b, c, zt, qap_num_variables, m_raw) = QAP::instance_map_with_evaluation(cs, &t)?;
         end_timer!(reduction_time);
 
         // Compute query densities
@@ -270,7 +271,6 @@ impl Groth16 {
     where
         C: ConstraintSynthesizer<ark_bn254::Fr>,
     {
-    
         let setup_time = start_timer!(|| "Groth16::Generator");
         let cs = ConstraintSystem::new_ref();
         cs.set_optimization_goal(OptimizationGoal::Constraints);
@@ -298,7 +298,8 @@ impl Groth16 {
         let domain_time = start_timer!(|| "Constructing evaluation domain");
 
         let domain_size = cs.num_constraints() + cs.num_instance_variables();
-        let domain = gpu::GpuDomain::new(domain_size).ok_or(SynthesisError::PolynomialDegreeTooLarge)?;
+        let domain =
+            gpu::GpuDomain::new(domain_size).ok_or(SynthesisError::PolynomialDegreeTooLarge)?;
         let t = domain.sample_element_outside_domain(rng);
 
         end_timer!(domain_time);
@@ -341,12 +342,17 @@ impl Groth16 {
         // Compute B window table
         let g2_time = start_timer!(|| "Compute G2 table");
         let g2_window = FixedBase::get_mul_window_size(non_zero_b);
-        let g2_table = FixedBase::get_window_table::<ark_bn254::G2Projective>(scalar_bits, g2_window, g2_generator);
+        let g2_table = FixedBase::get_window_table::<ark_bn254::G2Projective>(
+            scalar_bits,
+            g2_window,
+            g2_generator,
+        );
         end_timer!(g2_time);
 
         // Compute the B-query in G2
         let b_g2_time = start_timer!(|| "Calculate B G2");
-        let b_g2_query = FixedBase::msm::<ark_bn254::G2Projective>(scalar_bits, g2_window, &g2_table, &b);
+        let b_g2_query =
+            FixedBase::msm::<ark_bn254::G2Projective>(scalar_bits, g2_window, &g2_table, &b);
         drop(g2_table);
         end_timer!(b_g2_time);
 
@@ -354,7 +360,11 @@ impl Groth16 {
         let g1_window_time = start_timer!(|| "Compute G1 window table");
         let g1_window =
             FixedBase::get_mul_window_size(non_zero_a + non_zero_b + qap_num_variables + m_raw + 1);
-        let g1_table = FixedBase::get_window_table::<ark_bn254::G1Projective>(scalar_bits, g1_window, g1_generator);
+        let g1_table = FixedBase::get_window_table::<ark_bn254::G1Projective>(
+            scalar_bits,
+            g1_window,
+            g1_generator,
+        );
         end_timer!(g1_window_time);
 
         // Generate the R1CS proving key
@@ -368,13 +378,15 @@ impl Groth16 {
 
         // Compute the A-query
         let a_time = start_timer!(|| "Calculate A");
-        let a_query = FixedBase::msm::<ark_bn254::G1Projective>(scalar_bits, g1_window, &g1_table, &a);
+        let a_query =
+            FixedBase::msm::<ark_bn254::G1Projective>(scalar_bits, g1_window, &g1_table, &a);
         drop(a);
         end_timer!(a_time);
 
         // Compute the B-query in G1
         let b_g1_time = start_timer!(|| "Calculate B G1");
-        let b_g1_query = FixedBase::msm::<ark_bn254::G1Projective>(scalar_bits, g1_window, &g1_table, &b);
+        let b_g1_query =
+            FixedBase::msm::<ark_bn254::G1Projective>(scalar_bits, g1_window, &g1_table, &b);
         drop(b);
         end_timer!(b_g1_time);
 
@@ -391,7 +403,8 @@ impl Groth16 {
 
         // Compute the L-query
         let l_time = start_timer!(|| "Calculate L");
-        let l_query = FixedBase::msm::<ark_bn254::G1Projective>(scalar_bits, g1_window, &g1_table, &l);
+        let l_query =
+            FixedBase::msm::<ark_bn254::G1Projective>(scalar_bits, g1_window, &g1_table, &l);
         drop(l);
         end_timer!(l_time);
 
@@ -400,7 +413,12 @@ impl Groth16 {
         // Generate R1CS verification key
         let verifying_key_time = start_timer!(|| "Generate the R1CS verification key");
         let gamma_g2 = g2_generator.mul_bigint(&gamma.into_bigint());
-        let gamma_abc_g1 = FixedBase::msm::<ark_bn254::G1Projective>(scalar_bits, g1_window, &g1_table, &gamma_abc);
+        let gamma_abc_g1 = FixedBase::msm::<ark_bn254::G1Projective>(
+            scalar_bits,
+            g1_window,
+            &g1_table,
+            &gamma_abc,
+        );
 
         drop(g1_table);
 

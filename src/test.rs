@@ -157,8 +157,7 @@ mod gpu_bn_254 {
     use super::*;
     use crate::gpu::*;
     use ark_bn254;
-    fn test_prove_and_verify(n_iters: usize)
-    {
+    fn test_prove_and_verify(n_iters: usize) {
         let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
 
         let (pk, vk) = Groth16::setup(MySillyCircuit { a: None, b: None }, &mut rng).unwrap();

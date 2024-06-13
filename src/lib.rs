@@ -3,13 +3,7 @@
 //!
 //! [`Groth16`]: https://eprint.iacr.org/2016/260.pdf
 #![cfg_attr(not(feature = "std"), no_std)]
-#![warn(
-    unused,
-    future_incompatible,
-    nonstandard_style,
-    rust_2018_idioms,
-    missing_docs
-)]
+#![warn(unused, future_incompatible, nonstandard_style, rust_2018_idioms)]
 #![allow(clippy::many_single_char_names, clippy::op_ref)]
 #![forbid(unsafe_code)]
 
@@ -19,6 +13,9 @@ extern crate ark_std;
 #[cfg(feature = "r1cs")]
 #[macro_use]
 extern crate derivative;
+
+#[cfg(feature = "cuda")]
+pub use ag_cuda_ec::{init_global_workspace, init_local_workspace};
 
 /// Reduce an R1CS instance to a *Quadratic Arithmetic Program* instance.
 pub mod r1cs_to_qap;
@@ -50,17 +47,19 @@ pub use self::{generator::*, prover::*, verifier::*};
 
 use ark_crypto_primitives::snark::*;
 use ark_ec::pairing::Pairing;
+use ark_ff::PrimeField;
+use ark_poly::GeneralEvaluationDomain;
 use ark_relations::r1cs::{ConstraintSynthesizer, SynthesisError};
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, vec::Vec};
 use r1cs_to_qap::{LibsnarkReduction, R1CSToQAP};
-use ark_poly::GeneralEvaluationDomain;
-use ark_ff::PrimeField;
-
 
 /// The SNARK of [[Groth16]](https://eprint.iacr.org/2016/260.pdf).
 #[cfg(not(feature = "cuda"))]
-pub struct Groth16<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>> = LibsnarkReduction> {
+pub struct Groth16<
+    E: Pairing,
+    QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>> = LibsnarkReduction,
+> {
     _p: PhantomData<(E, QAP)>,
 }
 
@@ -70,7 +69,9 @@ pub struct Groth16 {
 }
 
 #[cfg(not(feature = "cuda"))]
-impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>> SNARK<E::ScalarField> for Groth16<E, QAP> {
+impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>>
+    SNARK<E::ScalarField> for Groth16<E, QAP>
+{
     type ProvingKey = ProvingKey<E>;
     type VerifyingKey = VerifyingKey<E>;
     type Proof = Proof<E>;
@@ -152,7 +153,10 @@ impl SNARK<ark_bn254::Fr> for Groth16 {
 }
 
 #[cfg(not(feature = "cuda"))]
-impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>> CircuitSpecificSetupSNARK<E::ScalarField> for Groth16<E, QAP> {}
+impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>>
+    CircuitSpecificSetupSNARK<E::ScalarField> for Groth16<E, QAP>
+{
+}
 
 #[cfg(feature = "cuda")]
 impl CircuitSpecificSetupSNARK<ark_bn254::Fr> for Groth16 {}

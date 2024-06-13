@@ -1,6 +1,6 @@
 use crate::r1cs_to_qap::*;
 use ark_bn254::G1Projective;
-use ark_ff::{Field, FftField};
+use ark_ff::{FftField, Field};
 use ark_poly::{
     domain::{self, radix2::Elements, DomainCoeff},
     EvaluationDomain, Radix2EvaluationDomain,
@@ -14,7 +14,7 @@ use ark_std::Zero;
 use rayon::prelude::*;
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq, CanonicalDeserialize, CanonicalSerialize, Debug)]
-pub struct GpuDomain(Radix2EvaluationDomain<ark_bn254::Fr>);
+pub struct GpuDomain(Radix2EvaluationDomain<ark_bn254::Fr>, [ark_bn254::Fr; 64]);
 
 pub trait GpuDomainCoeff: Sized + DomainCoeff<ark_bn254::Fr> {
     fn fft_in_place(domain: &GpuDomain, input: &mut Vec<Self>);
@@ -24,31 +24,73 @@ pub trait GpuDomainCoeff: Sized + DomainCoeff<ark_bn254::Fr> {
 
 impl<T: DomainCoeff<ark_bn254::Fr>> GpuDomainCoeff for T {
     default fn fft_in_place(domain: &GpuDomain, input: &mut Vec<Self>) {
-        domain.0.fft_in_place(input)
+        let coefficients_time = start_timer!(|| format!("CPU FFT {}", input.len()));
+        domain.0.fft_in_place(input);
+        end_timer!(coefficients_time);
     }
 
     default fn ifft_in_place(domain: &GpuDomain, input: &mut Vec<Self>) {
-        domain.0.ifft_in_place(input)
+        let coefficients_time = start_timer!(|| format!("CPU iFFT {}", input.len()));
+        domain.0.ifft_in_place(input);
+        end_timer!(coefficients_time);
     }
 }
 
 impl GpuDomainCoeff for G1Projective {
     fn fft_in_place(domain: &GpuDomain, input: &mut Vec<Self>) {
-        let mut omegas = vec![ark_bn254::Fr::zero(); 32];
-        omegas[0] = domain.group_gen();
-        for i in 1..32 {
-            omegas[i] = omegas[i - 1].square();
-        }
-        ag_cuda_ec::ec_fft::radix_ec_fft_mt(input, &omegas).unwrap();
+        let coefficients_time = start_timer!(|| format!("GPU FFT {}", input.len()));
+        ag_cuda_ec::fft::radix_fft_mt(input, &domain.1[0..32], Some(domain.0.offset)).unwrap();
+        end_timer!(coefficients_time);
     }
 
     fn ifft_in_place(domain: &GpuDomain, input: &mut Vec<Self>) {
-        let mut omegas = vec![ark_bn254::Fr::zero(); 32];
-        omegas[0] = domain.group_gen();
+        let coefficients_time = start_timer!(|| format!("GPU iFFT {}", input.len()));
+        ag_cuda_ec::fft::radix_ifft_mt(
+            input,
+            &domain.1[32..64],
+            Some(domain.0.offset_inv),
+            domain.0.size_inv,
+        )
+        .unwrap();
+        end_timer!(coefficients_time);
+    }
+}
+
+impl GpuDomainCoeff for ark_bn254::Fr {
+    fn fft_in_place(domain: &GpuDomain, input: &mut Vec<Self>) {
+        let coefficients_time = start_timer!(|| format!("GPU FFT {}", input.len()));
+        ag_cuda_ec::fft::radix_fft_mt(input, &domain.1[0..32], Some(domain.0.offset)).unwrap();
+        end_timer!(coefficients_time);
+    }
+
+    fn ifft_in_place(domain: &GpuDomain, input: &mut Vec<Self>) {
+        let coefficients_time = start_timer!(|| format!("GPU iFFT {}", input.len()));
+        ag_cuda_ec::fft::radix_ifft_mt(
+            input,
+            &domain.1[32..64],
+            Some(domain.0.offset_inv),
+            domain.0.size_inv,
+        )
+        .unwrap();
+        end_timer!(coefficients_time);
+    }
+}
+
+impl GpuDomain {
+    fn from_domain(domain: Radix2EvaluationDomain<ark_bn254::Fr>) -> Self {
+        let mut omega_cache = [ark_bn254::Fr::zero(); 64];
+        let omegas = &mut omega_cache[0..32];
+        omegas[0] = domain.group_gen;
         for i in 1..32 {
             omegas[i] = omegas[i - 1].square();
         }
-        ag_cuda_ec::ec_fft::radix_ec_ifft_mt(input, &omegas).unwrap();
+
+        let inv_omegas = &mut omega_cache[32..64];
+        inv_omegas[0] = domain.group_gen_inv;
+        for i in 1..32 {
+            inv_omegas[i] = inv_omegas[i - 1].square();
+        }
+        Self(domain, omega_cache)
     }
 }
 
@@ -65,12 +107,13 @@ impl EvaluationDomain<ark_bn254::Fr> for GpuDomain {
     type Elements = Elements<ark_bn254::Fr>;
 
     fn new(num_coeffs: usize) -> Option<Self> {
-        let domain = Radix2EvaluationDomain::new(num_coeffs).unwrap();
-        Some(Self(domain))
+        let domain = Radix2EvaluationDomain::new(num_coeffs)?;
+        Some(Self::from_domain(domain))
     }
 
     fn get_coset(&self, offset: ark_bn254::Fr) -> Option<Self> {
-        Some(Self(self.0.get_coset(offset).unwrap()))
+        let coset_domain = self.0.get_coset(offset)?;
+        Some(Self::from_domain(coset_domain))
     }
 
     fn compute_size_of_domain(num_coeffs: usize) -> Option<usize> {
@@ -176,8 +219,8 @@ impl R1CSToQAP<ark_bn254::Fr, GpuDomain> for GpuLibsnarkReduction {
         num_constraints: usize,
         full_assignment: &[ark_bn254::Fr],
     ) -> R1CSResult<Vec<ark_bn254::Fr>> {
-        let domain =
-            GpuDomain::new(num_constraints + num_inputs).ok_or(SynthesisError::PolynomialDegreeTooLarge)?;
+        let domain = GpuDomain::new(num_constraints + num_inputs)
+            .ok_or(SynthesisError::PolynomialDegreeTooLarge)?;
         let domain_size = domain.size();
         let zero = ark_bn254::Fr::zero();
 

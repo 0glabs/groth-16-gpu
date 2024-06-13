@@ -5,6 +5,7 @@ version = 3
 [[package]]
 name = "ag-build"
 version = "0.1.0"
+source = "git+https://github.com/0glabs/0g-ec-gpu.git?rev=9d3a884#9d3a884d83485e98811af133250c9e5f718a2e59"
 dependencies = [
  "ag-types",
  "ark-ff",
@@ -18,6 +19,7 @@ dependencies = [
 [[package]]
 name = "ag-cuda-ec"
 version = "0.1.0"
+source = "git+https://github.com/0glabs/0g-ec-gpu.git?rev=9d3a884#9d3a884d83485e98811af133250c9e5f718a2e59"
 dependencies = [
  "ag-build",
  "ag-cuda-proxy",
@@ -35,6 +37,7 @@ dependencies = [
 [[package]]
 name = "ag-cuda-proxy"
 version = "0.1.0"
+source = "git+https://github.com/0glabs/0g-ec-gpu.git?rev=9d3a884#9d3a884d83485e98811af133250c9e5f718a2e59"
 dependencies = [
  "ag-types",
  "fil-rustacuda",
@@ -44,6 +47,7 @@ dependencies = [
 [[package]]
 name = "ag-cuda-workspace-macro"
 version = "0.1.0"
+source = "git+https://github.com/0glabs/0g-ec-gpu.git?rev=9d3a884#9d3a884d83485e98811af133250c9e5f718a2e59"
 dependencies = [
  "quote",
  "syn 2.0.66",
@@ -52,6 +56,7 @@ dependencies = [
 [[package]]
 name = "ag-types"
 version = "0.2.0"
+source = "git+https://github.com/0glabs/0g-ec-gpu.git?rev=9d3a884#9d3a884d83485e98811af133250c9e5f718a2e59"
 dependencies = [
  "ark-ec",
  "ark-ff",

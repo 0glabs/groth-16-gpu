@@ -7,8 +7,8 @@ use super::{PreparedVerifyingKey, Proof, VerifyingKey};
 
 use ark_relations::r1cs::{Result as R1CSResult, SynthesisError};
 
-use core::ops::{AddAssign, Neg};
 use ark_poly::GeneralEvaluationDomain;
+use core::ops::{AddAssign, Neg};
 
 /// Prepare the verifying key `vk` for use in proof verification.
 pub fn prepare_verifying_key<E: Pairing>(vk: &VerifyingKey<E>) -> PreparedVerifyingKey<E> {
@@ -21,7 +21,9 @@ pub fn prepare_verifying_key<E: Pairing>(vk: &VerifyingKey<E>) -> PreparedVerify
 }
 
 #[cfg(not(feature = "cuda"))]
-impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>> Groth16<E, QAP> {
+impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>>
+    Groth16<E, QAP>
+{
     /// Prepare proof inputs for use with [`verify_proof_with_prepared_inputs`], wrt the prepared
     /// verification key `pvk` and instance public inputs.
     pub fn prepare_inputs(
@@ -121,7 +123,8 @@ impl Groth16 {
             ],
         );
 
-        let test = ark_bn254::Bn254::final_exponentiation(qap).ok_or(SynthesisError::UnexpectedIdentity)?;
+        let test = ark_bn254::Bn254::final_exponentiation(qap)
+            .ok_or(SynthesisError::UnexpectedIdentity)?;
 
         Ok(test.0 == pvk.alpha_g1_beta_g2)
     }
