@@ -61,11 +61,11 @@ debug = true
 debug-assertions = true
 incremental = true
 
-[[bench]]
-name = "groth16-benches"
-path = "benches/bench.rs"
-harness = false
-required-features = ["std"]
+# [[bench]]
+# name = "groth16-benches"
+# path = "benches/bench.rs"
+# harness = false
+# required-features = ["std"]
 
 [dependencies]
 ag-cuda-ec = { git = "https://github.com/0glabs/0g-ec-gpu.git", rev = "9d3a884", optional = true }
@@ -173,7 +173,7 @@ default-features = false
 version = "1"
 
 [features]
-default = ["parallel"]
+default = ["parallel", "ark-bn254"]
 parallel = [
     "std",
     "ark-ff/parallel",

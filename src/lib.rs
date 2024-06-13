@@ -32,7 +32,7 @@ pub mod prover;
 /// Verify proofs for the Groth16 zkSNARK construction.
 pub mod verifier;
 
-#[cfg(feature = "cuda")]
+// #[cfg(feature = "cuda")]
 pub mod gpu;
 
 /// Constraints for the Groth16 verifier.
@@ -43,34 +43,27 @@ pub mod constraints;
 mod test;
 
 pub use self::data_structures::*;
-pub use self::{generator::*, prover::*, verifier::*};
+// pub use self::{verifier::*};
 
 use ark_crypto_primitives::snark::*;
 use ark_ec::pairing::Pairing;
-use ark_ff::PrimeField;
-use ark_poly::GeneralEvaluationDomain;
+use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_relations::r1cs::{ConstraintSynthesizer, SynthesisError};
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, vec::Vec};
 use r1cs_to_qap::{LibsnarkReduction, R1CSToQAP};
 
 /// The SNARK of [[Groth16]](https://eprint.iacr.org/2016/260.pdf).
-#[cfg(not(feature = "cuda"))]
 pub struct Groth16<
     E: Pairing,
-    QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>> = LibsnarkReduction,
+    D: EvaluationDomain<E::ScalarField> = GeneralEvaluationDomain<<E as Pairing>::ScalarField>,
+    QAP: R1CSToQAP<E::ScalarField, D> = LibsnarkReduction,
 > {
-    _p: PhantomData<(E, QAP)>,
+    _p: PhantomData<(E, QAP, D)>,
 }
 
-#[cfg(feature = "cuda")]
-pub struct Groth16 {
-    _p: PhantomData<(ark_bn254::Bn254, gpu::GpuLibsnarkReduction)>,
-}
-
-#[cfg(not(feature = "cuda"))]
-impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>>
-    SNARK<E::ScalarField> for Groth16<E, QAP>
+impl<E: Pairing, D: EvaluationDomain<E::ScalarField>, QAP: R1CSToQAP<E::ScalarField, D>>
+    SNARK<E::ScalarField> for Groth16<E, D, QAP>
 {
     type ProvingKey = ProvingKey<E>;
     type VerifyingKey = VerifyingKey<E>;
@@ -99,7 +92,7 @@ impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::Scala
     fn process_vk(
         circuit_vk: &Self::VerifyingKey,
     ) -> Result<Self::ProcessedVerifyingKey, Self::Error> {
-        Ok(prepare_verifying_key(circuit_vk))
+        Ok(verifier::prepare_verifying_key(circuit_vk))
     }
 
     fn verify_with_processed_vk(
@@ -111,52 +104,7 @@ impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::Scala
     }
 }
 
-#[cfg(feature = "cuda")]
-impl SNARK<ark_bn254::Fr> for Groth16 {
-    type ProvingKey = ProvingKey<ark_bn254::Bn254>;
-    type VerifyingKey = VerifyingKey<ark_bn254::Bn254>;
-    type Proof = Proof<ark_bn254::Bn254>;
-    type ProcessedVerifyingKey = PreparedVerifyingKey<ark_bn254::Bn254>;
-    type Error = SynthesisError;
-
-    fn circuit_specific_setup<C: ConstraintSynthesizer<ark_bn254::Fr>, R: RngCore>(
-        circuit: C,
-        rng: &mut R,
-    ) -> Result<(Self::ProvingKey, Self::VerifyingKey), Self::Error> {
-        let pk = Self::generate_random_parameters_with_reduction(circuit, rng)?;
-        let vk = pk.vk.clone();
-
-        Ok((pk, vk))
-    }
-
-    fn prove<C: ConstraintSynthesizer<ark_bn254::Fr>, R: RngCore>(
-        pk: &Self::ProvingKey,
-        circuit: C,
-        rng: &mut R,
-    ) -> Result<Self::Proof, Self::Error> {
-        Self::create_random_proof_with_reduction(circuit, pk, rng)
-    }
-
-    fn process_vk(
-        circuit_vk: &Self::VerifyingKey,
-    ) -> Result<Self::ProcessedVerifyingKey, Self::Error> {
-        Ok(prepare_verifying_key(circuit_vk))
-    }
-
-    fn verify_with_processed_vk(
-        circuit_pvk: &Self::ProcessedVerifyingKey,
-        x: &[ark_bn254::Fr],
-        proof: &Self::Proof,
-    ) -> Result<bool, Self::Error> {
-        Ok(Self::verify_proof(&circuit_pvk, proof, &x)?)
-    }
-}
-
-#[cfg(not(feature = "cuda"))]
-impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>>
-    CircuitSpecificSetupSNARK<E::ScalarField> for Groth16<E, QAP>
+impl<E: Pairing, D: EvaluationDomain<E::ScalarField>, QAP: R1CSToQAP<E::ScalarField, D>>
+    CircuitSpecificSetupSNARK<E::ScalarField> for Groth16<E, D, QAP>
 {
 }
-
-#[cfg(feature = "cuda")]
-impl CircuitSpecificSetupSNARK<ark_bn254::Fr> for Groth16 {}

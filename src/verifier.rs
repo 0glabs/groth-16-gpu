@@ -7,7 +7,7 @@ use super::{PreparedVerifyingKey, Proof, VerifyingKey};
 
 use ark_relations::r1cs::{Result as R1CSResult, SynthesisError};
 
-use ark_poly::GeneralEvaluationDomain;
+use ark_poly::EvaluationDomain;
 use core::ops::{AddAssign, Neg};
 
 /// Prepare the verifying key `vk` for use in proof verification.
@@ -20,9 +20,8 @@ pub fn prepare_verifying_key<E: Pairing>(vk: &VerifyingKey<E>) -> PreparedVerify
     }
 }
 
-#[cfg(not(feature = "cuda"))]
-impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::ScalarField>>>
-    Groth16<E, QAP>
+impl<E: Pairing, D: EvaluationDomain<E::ScalarField>, QAP: R1CSToQAP<E::ScalarField, D>>
+    Groth16<E, D, QAP>
 {
     /// Prepare proof inputs for use with [`verify_proof_with_prepared_inputs`], wrt the prepared
     /// verification key `pvk` and instance public inputs.
@@ -74,67 +73,6 @@ impl<E: Pairing, QAP: R1CSToQAP<E::ScalarField, GeneralEvaluationDomain<E::Scala
         pvk: &PreparedVerifyingKey<E>,
         proof: &Proof<E>,
         public_inputs: &[E::ScalarField],
-    ) -> R1CSResult<bool> {
-        let prepared_inputs = Self::prepare_inputs(pvk, public_inputs)?;
-        Self::verify_proof_with_prepared_inputs(pvk, proof, &prepared_inputs)
-    }
-}
-
-#[cfg(feature = "cuda")]
-use ark_ec;
-#[cfg(feature = "cuda")]
-impl Groth16 {
-    /// Prepare proof inputs for use with [`verify_proof_with_prepared_inputs`], wrt the prepared
-    /// verification key `pvk` and instance public inputs.
-    pub fn prepare_inputs(
-        pvk: &PreparedVerifyingKey<ark_bn254::Bn254>,
-        public_inputs: &[ark_bn254::Fr],
-    ) -> R1CSResult<ark_bn254::G1Projective> {
-        if (public_inputs.len() + 1) != pvk.vk.gamma_abc_g1.len() {
-            return Err(SynthesisError::MalformedVerifyingKey);
-        }
-
-        let mut g_ic = pvk.vk.gamma_abc_g1[0].into_group();
-        for (i, b) in public_inputs.iter().zip(pvk.vk.gamma_abc_g1.iter().skip(1)) {
-            g_ic.add_assign(&b.mul_bigint(i.into_bigint()));
-        }
-
-        Ok(g_ic)
-    }
-
-    /// Verify a Groth16 proof `proof` against the prepared verification key `pvk` and prepared public
-    /// inputs. This should be preferred over [`verify_proof`] if the instance's public inputs are
-    /// known in advance.
-    pub fn verify_proof_with_prepared_inputs(
-        pvk: &PreparedVerifyingKey<ark_bn254::Bn254>,
-        proof: &Proof<ark_bn254::Bn254>,
-        prepared_inputs: &ark_bn254::G1Projective,
-    ) -> R1CSResult<bool> {
-        let qap = ark_bn254::Bn254::multi_miller_loop(
-            [
-                proof.a,
-                prepared_inputs.into_affine().into(),
-                proof.c.into(),
-            ],
-            [
-                proof.b.into(),
-                pvk.gamma_g2_neg_pc.clone(),
-                pvk.delta_g2_neg_pc.clone(),
-            ],
-        );
-
-        let test = ark_bn254::Bn254::final_exponentiation(qap)
-            .ok_or(SynthesisError::UnexpectedIdentity)?;
-
-        Ok(test.0 == pvk.alpha_g1_beta_g2)
-    }
-
-    /// Verify a Groth16 proof `proof` against the prepared verification key `pvk`,
-    /// with respect to the instance `public_inputs`.
-    pub fn verify_proof(
-        pvk: &PreparedVerifyingKey<ark_bn254::Bn254>,
-        proof: &Proof<ark_bn254::Bn254>,
-        public_inputs: &[ark_bn254::Fr],
     ) -> R1CSResult<bool> {
         let prepared_inputs = Self::prepare_inputs(pvk, public_inputs)?;
         Self::verify_proof_with_prepared_inputs(pvk, proof, &prepared_inputs)

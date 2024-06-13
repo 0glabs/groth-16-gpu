@@ -2,6 +2,8 @@ use ark_ec::pairing::Pairing;
 use ark_serialize::*;
 use ark_std::vec::Vec;
 
+use crate::verifier;
+
 /// A proof in the Groth16 SNARK.
 #[derive(Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Proof<E: Pairing> {
@@ -75,7 +77,7 @@ impl<E: Pairing> From<PreparedVerifyingKey<E>> for VerifyingKey<E> {
 
 impl<E: Pairing> From<VerifyingKey<E>> for PreparedVerifyingKey<E> {
     fn from(other: VerifyingKey<E>) -> Self {
-        crate::prepare_verifying_key(&other)
+        verifier::prepare_verifying_key(&other)
     }
 }
 

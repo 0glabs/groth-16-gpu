@@ -1,4 +1,4 @@
-use crate::{prepare_verifying_key, Groth16};
+use crate::{verifier::prepare_verifying_key, Groth16};
 use ark_crypto_primitives::snark::{CircuitSpecificSetupSNARK, SNARK};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
@@ -42,7 +42,6 @@ impl<ConstraintF: Field> ConstraintSynthesizer<ConstraintF> for MySillyCircuit<C
     }
 }
 
-#[cfg(not(feature = "cuda"))]
 fn test_prove_and_verify<E>(n_iters: usize)
 where
     E: Pairing,
@@ -73,7 +72,6 @@ where
     }
 }
 
-#[cfg(not(feature = "cuda"))]
 fn test_rerandomize<E>()
 where
     E: Pairing,
@@ -119,7 +117,6 @@ where
     }
 }
 
-#[cfg(not(feature = "cuda"))]
 mod bls12_377 {
     use super::{test_prove_and_verify, test_rerandomize};
     use ark_bls12_377::Bls12_377;
@@ -135,7 +132,6 @@ mod bls12_377 {
     }
 }
 
-#[cfg(not(feature = "cuda"))]
 mod cp6_782 {
     use super::{test_prove_and_verify, test_rerandomize};
 
@@ -157,6 +153,8 @@ mod gpu_bn_254 {
     use super::*;
     use crate::gpu::*;
     use ark_bn254;
+
+    type Groth16 = crate::Groth16<ark_bn254::Bn254, GpuDomain>;
     fn test_prove_and_verify(n_iters: usize) {
         let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());
 
